@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>WebSocket Test</title>
+</head>
+<body>
+	<h1>WebSocket Test</h1>
+	<input placeholder="message" />
+	<button>Send</button>
+	<div id="messages"></div>
+
+	<script type="text/javascript">
+		let ws;
+
+		document.addEventListener('click', (e) => {
+			if(e.target.tagName !== 'BUTTON')
+				return;
+
+			const input = document.querySelector("input")
+			const msg = input.value;
+			input.value = '';
+
+			ws.send(msg);
+		});
+
+		function connectWebSocket() {
+			console.log("Connecting");
+			ws = new WebSocket("ws://localhost:3000");
+
+			ws.onopen = function() {
+				console.log("Connected");
+				// ws.send("Hello Server!");
+			};
+			ws.onmessage = function(event) {
+				console.log("Received: " + event.data);
+				const p = document.createElement('div')
+				p.innerText = event.data;
+				document.querySelector("#messages").appendChild(p);
+			};
+			ws.onclose = function() {
+				console.log("Disconnected");
+			};
+		}
+
+		async function checkServerStatus() {
+			if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING))
+				return;
+
+			try {
+				const response = await fetch('http://localhost:8080/health')
+
+				console.log(response);
+
+				if(!response.ok)
+					return;
+
+				connectWebSocket();
+			} catch(e) {
+			}
+		}
+
+		setInterval(checkServerStatus, 1000);
+
+	</script>
+</body>
+</html>
