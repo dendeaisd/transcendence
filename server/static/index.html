@@ -8,9 +8,8 @@
 	<input placeholder="message" />
 	<button>Send</button>
 	<div id="messages"></div>
-
+	<script type="text/javascript" src="scripts/websocket.js"></script>
 	<script type="text/javascript">
-		let ws;
 
 		document.addEventListener('click', (e) => {
 			if(e.target.tagName !== 'BUTTON')
@@ -20,53 +19,14 @@
 			const msg = input.value;
 			input.value = '';
 
-			ws.send(msg);
+			WS.push('message', msg);
 		});
 
-		function connectWebSocket() {
-			console.log("Connecting");
-			ws = new WebSocket("ws://localhost:3000");
-
-			ws.onopen = function() {
-				console.log("Connected");
-				// ws.send("Hello Server!");
-			};
-			ws.onmessage = function(event) {
-				console.log("Received: " + event.data);
-				const p = document.createElement('div')
-				p.innerText = event.data;
-				document.querySelector("#messages").appendChild(p);
-			};
-			ws.onclose = function() {
-				console.log("Disconnected");
-			};
-		}
-
-		async function checkServerStatus() {
-			setTimeout(checkServerStatus, 1000);
-
-			if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING))
-				return;
-
-			try {
-				const response = await fetch('http://localhost:8080/health')
-
-				// console.log(response);
-
-				if(!response.ok)
-					return;
-
-				connectWebSocket();
-			} catch(e) {
-			}
-		}
-
-		function ping()
-		{
-			ws.send("ping");
-		}
-
-		checkServerStatus();
+		WS.on('message', (msg) => {
+			const div = document.createElement('div');
+			div.textContent = msg;
+			document.querySelector('#messages').appendChild(div);
+		});
 
 	</script>
 </body>

@@ -1,7 +1,7 @@
 require 'em-websocket'
 require 'em-http-server'
 require 'mime/types'
-require_relative 'websocket'
+require_relative 'websocket_manager'
 
 def path_get_absolute(fspath)
 	absolute_path = File.expand_path(fspath)
@@ -19,6 +19,10 @@ def path_contains_base_path?(target_path, base_path)
 	return absolute_target_path.start_with?(absolute_base_path)
 end
 
+WebSocketManager.on('message') do |ws, payload|
+	WebSocketManager.push('message', payload, WebSocketManager.get_connections)
+end
+
 $ws_port = 3000
 $http_port = 8080
 $static_dir = path_get_absolute('./static')
@@ -29,18 +33,18 @@ EM.run do
 		ws.onopen do
 			puts "Client connected #{ws.object_id}"
 			WebSocketManager.add_connection(ws.object_id, ws)
-			WebSocketManager.broadcast("client " + ws.object_id.to_s + " connected")
+			# WebSocketManager.broadcast("client " + ws.object_id.to_s + " connected")
 		end
 
 		ws.onmessage do |msg|
 			puts "Received message: #{msg}"
-			WebSocketManager.broadcast("client " + ws.object_id.to_s + " " + msg)
+			WebSocketManager.process(ws, msg)
 		end
 
 		ws.onclose do
 			puts "Client disconnected"
 			WebSocketManager.remove_connection(ws.object_id)
-			WebSocketManager.broadcast("client " + ws.object_id.to_s + " disconnected")
+			# WebSocketManager.broadcast("client " + ws.object_id.to_s + " disconnected")
 		end
 
 		ws.onerror do |error|
@@ -108,4 +112,3 @@ EM.run do
 	EM.start_server "0.0.0.0", $http_port, HttpServer
 	puts "HTTP server started on http://0.0.0.0:#{$http_port}"
 end
-

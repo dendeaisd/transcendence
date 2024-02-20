@@ -1,7 +1,7 @@
 class User
 
-	def initialize(name, connection)
+	def initialize(name, ws)
 		@name = name
-		@connection = connection
+		@ws = ws
 	end
 end
