@@ -43,13 +43,15 @@
 		}
 
 		async function checkServerStatus() {
+			setTimeout(checkServerStatus, 1000);
+
 			if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING))
 				return;
 
 			try {
 				const response = await fetch('http://localhost:8080/health')
 
-				console.log(response);
+				// console.log(response);
 
 				if(!response.ok)
 					return;
@@ -59,7 +61,12 @@
 			}
 		}
 
-		setInterval(checkServerStatus, 1000);
+		function ping()
+		{
+			ws.send("ping");
+		}
+
+		checkServerStatus();
 
 	</script>
 </body>

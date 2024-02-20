@@ -1,13 +1,31 @@
 require 'em-websocket'
 require 'em-http-server'
+require 'mime/types'
 require_relative 'websocket'
 
-ws_port = 3000
-http_port = 8080
+def path_get_absolute(fspath)
+	absolute_path = File.expand_path(fspath)
+	# absolute_path += File::SEPARATOR unless absolute_path.end_with?(File::SEPARATOR)
+
+	return absolute_path
+end
+
+def path_contains_base_path?(target_path, base_path)
+	# Expand both paths to their absolute forms
+	absolute_target_path = path_get_absolute(target_path)
+	absolute_base_path = path_get_absolute(base_path)
+
+	# Check if the target path starts with the base path
+	return absolute_target_path.start_with?(absolute_base_path)
+end
+
+$ws_port = 3000
+$http_port = 8080
+$static_dir = path_get_absolute('./static')
 
 EM.run do
 	# WebSocket Server
-	EM::WebSocket.run(host: "0.0.0.0", port: ws_port) do |ws|
+	EM::WebSocket.run(host: "0.0.0.0", port: $ws_port) do |ws|
 		ws.onopen do
 			puts "Client connected #{ws.object_id}"
 			WebSocketManager.add_connection(ws.object_id, ws)
@@ -30,7 +48,7 @@ EM.run do
 		end
 	end
 
-	puts "WebSocket server started on ws://0.0.0.0:#{ws_port}"
+	puts "WebSocket server started on ws://0.0.0.0:#{$ws_port}"
 
 	# HTTP Server
 	class HttpServer < EM::HttpServer::Server
@@ -43,13 +61,14 @@ EM.run do
 			response = EM::DelegatedHttpResponse.new(self)
 
 			puts "Received HTTP request: #{@http_request_method} #{@http_request_uri}"
+			uri = @http_request_uri
 
 			# Simple routing example
-			case @http_request_uri
+			case uri
 			when '/'
 				response.status = 200
 				response.content_type 'text/html'
-				file_path = '../client/index.html'
+				file_path = File.join($static_dir, 'index.html')
 				puts file_path
 				puts File.exist?(file_path)
 				if File.exist?(file_path)
@@ -64,16 +83,29 @@ EM.run do
 				response.content_type 'text/plain'
 				response.content = 'OK'
 			else
-				response.status = 404
-				response.content_type 'text/plain'
-				response.content = 'Not Found'
+				absolute_path = path_get_absolute(File.join($static_dir, uri))
+				if !path_contains_base_path?(absolute_path, $static_dir)
+					response.status = 400
+					response.content_type 'text/plain'
+					response.content = 'Bad Request'
+				elsif File.exist?(absolute_path) && File.readable?(absolute_path)
+					response.status = 200
+					response.content_type MIME::Types.type_for(absolute_path).first.content_type
+					response.content = File.read(absolute_path)
+				else
+					response.status = 404
+					response.content_type 'text/plain'
+					response.content = 'File Not Found'
+				end
 			end
 
+			# puts "Sending response..."
 			response.send_response
 		end
 	end
 
 	# Start the HTTP server
-	EM.start_server "0.0.0.0", http_port, HttpServer
-	puts "HTTP server started on http://0.0.0.0:#{http_port}"
+	EM.start_server "0.0.0.0", $http_port, HttpServer
+	puts "HTTP server started on http://0.0.0.0:#{$http_port}"
 end
+
