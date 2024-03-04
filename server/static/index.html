@@ -7,7 +7,9 @@
 	<h1>WebSocket Test</h1>
 	<input placeholder="message" />
 	<button>Send</button>
+	<span id="ping"></span>
 	<div id="messages"></div>
+	<div id="sliders"></div>
 	<script type="text/javascript" src="scripts/websocket.js"></script>
 	<script type="text/javascript">
 
@@ -22,10 +24,92 @@
 			WS.push('message', msg);
 		});
 
-		WS.on('message', (msg) => {
+		WS.on('message', msg => {
 			const div = document.createElement('div');
 			div.textContent = msg;
 			document.querySelector('#messages').appendChild(div);
+		});
+
+		WS.on('connect', payload => {
+			const {id} = payload;
+
+			addSlider(id);
+		});
+
+		WS.on('list', payload => {
+			const {ids} = payload;
+
+			ids.forEach(id => addSlider(id));
+		});
+
+		WS.on('disconnect', payload => {
+			const {id} = payload;
+
+			const slider = document.querySelector('[data-id="' + id + '"] input');
+			slider.remove();
+		});
+
+		WS.on('slider', payload => {
+			const {id, value} = payload;
+
+			const slider = document.querySelector('[data-id="' + id + '"] input');
+			slider.value = value;
+		});
+
+		WS.on('move', payload => {
+			const {id, x} = payload;
+
+			moveSlider(id, x);
+		});
+
+		setInterval(async () => {
+			const start = performance.now();
+			const ping = await WS.request('ping');
+			const end = performance.now();
+			document.querySelector('#ping').textContent = `Ping: ${end - start}ms`;
+		}, 1000);
+
+		function addSlider(id) {
+			const sliders = document.querySelector('#sliders');
+			const wrapper = document.createElement('div');
+			wrapper.setAttribute('data-id', id);
+			const slider = document.createElement('input');
+			const value = document.createElement('span');
+			value.innerText = slider.value.padStart(3, ' ');
+			value.style.fontFamily = 'monospace';
+			slider.setAttribute('type', 'range');
+			if(WS.isSelf(id))
+				slider.addEventListener('input', e => {
+					WS.push('slider', {id, value: +e.target.value});
+				});
+			else
+				slider.setAttribute('disabled', true);
+			wrapper.appendChild(slider);
+			wrapper.appendChild(value);
+			sliders.appendChild(wrapper);
+		}
+
+		function moveSlider(id, inc) {
+			const slider = document.querySelector('[data-id="' + id + '"] input');
+			const display = slider.nextElementSibling;
+			const value = +slider.value;
+			slider.value = Math.min(Math.max(value + inc, 0), 100);
+			display.innerText = slider.value.padStart(3, ' ');
+
+			console.log(slider.value.padStart(3, ' '));
+		}
+
+		document.addEventListener('keydown', e => {
+			const id = WS.getId();
+
+			if(e.key === 'ArrowLeft') {
+				moveSlider(id, -1);
+				WS.push('move', {id, x: -1, y: 0});
+			}
+			if(e.key === 'ArrowRight') {
+				moveSlider(id, 1);
+				WS.push('move', {id, x: 1, y: 0});
+			}
 		});
 
 	</script>

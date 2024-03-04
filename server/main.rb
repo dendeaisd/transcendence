@@ -19,8 +19,20 @@ def path_contains_base_path?(target_path, base_path)
 	return absolute_target_path.start_with?(absolute_base_path)
 end
 
-WebSocketManager.on('message') do |ws, payload|
+WebSocketManager.on('message') do |connection, payload|
 	WebSocketManager.push('message', payload, WebSocketManager.get_connections)
+end
+
+WebSocketManager.on('ping') do |connection, payload|
+	payload
+end
+
+WebSocketManager.on('slider') do |connection, payload|
+	WebSocketManager.broadcast(connection[:id], 'slider', payload)
+end
+
+WebSocketManager.on('move') do |connection, payload|
+	WebSocketManager.broadcast(connection[:id], 'move', payload)
 end
 
 $ws_port = 3000
@@ -31,9 +43,13 @@ EM.run do
 	# WebSocket Server
 	EM::WebSocket.run(host: "0.0.0.0", port: $ws_port) do |ws|
 		ws.onopen do
-			puts "Client connected #{ws.object_id}"
-			WebSocketManager.add_connection(ws.object_id, ws)
-			# WebSocketManager.broadcast("client " + ws.object_id.to_s + " connected")
+			id = ws.object_id
+			puts "Client connected #{id}"
+			WebSocketManager.add_connection(id, ws)
+			WebSocketManager.push('_handshake', {id: id}, [WebSocketManager.get_connection(id)])
+			WebSocketManager.push('connect', {id: id}, WebSocketManager.get_connections)
+			WebSocketManager.push('list', {ids: WebSocketManager.get_ids - [id]}, [WebSocketManager.get_connection(id)])
+			# WebSocketManager.broadcast("client " + id.to_s + " connected")
 		end
 
 		ws.onmessage do |msg|
@@ -44,6 +60,7 @@ EM.run do
 		ws.onclose do
 			puts "Client disconnected"
 			WebSocketManager.remove_connection(ws.object_id)
+			WebSocketManager.push('disconnect', {id: ws.object_id}, WebSocketManager.get_connections)
 			# WebSocketManager.broadcast("client " + ws.object_id.to_s + " disconnected")
 		end
 

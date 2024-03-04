@@ -6,7 +6,7 @@ module WebSocketManager
 
 	class << self
 		def add_connection(id, ws)
-			@websockets[id] = {ws: ws, user: nil}
+			@websockets[id] = {id: id, ws: ws, user: nil}
 		end
 
 		def get_connection(id)
@@ -14,7 +14,11 @@ module WebSocketManager
 		end
 
 		def get_connections
-			@websockets.map { |id, connection| connection[:ws] }
+			@websockets.map { |id, connection| connection }
+		end
+
+		def get_ids
+			@websockets.map { |id, connection| id }
 		end
 
 		def get_user(id)
@@ -37,7 +41,13 @@ module WebSocketManager
 				return
 			end
 
-			result = listener.call(ws, payload)
+			connection = @websockets[ws.object_id]
+
+			if connection == nil
+				return
+			end
+
+			result = listener.call(connection, payload)
 
 			if id == nil
 				return
@@ -53,13 +63,19 @@ module WebSocketManager
 
 		def push(event, payload, clients)
 			message = {event: event, payload: payload}.to_json
-			clients.each do |client|
-				client.send(message)
+
+			clients.each do |connection|
+				connection[:ws].send(message)
 			end
 		end
 
-		def broadcast(message)
-			@websockets.each_value do |connection|
+		def broadcast(sender, event, payload)
+			message = {event: event, payload: payload}.to_json
+
+			@websockets.each do |id, connection|
+				if id == sender
+					next
+				end
 				connection[:ws].send(message)
 			end
 		end

@@ -1,4 +1,4 @@
-((exports) => {
+(exports => {
 
 	let ws;
 	const requests = {};
@@ -28,8 +28,16 @@
 			const data = JSON.parse(incoming.data);
 			const {id, event, payload} = data;
 
+			if(id == null)
+				console.log(data);
+
 			if(isResponse(data))
 				return requests[id](payload);
+
+			if(event === '_handshake') {
+				ws.id = payload.id;
+				return;
+			}
 
 			const listener = listeners[event];
 
@@ -38,6 +46,8 @@
 
 			listener(payload);
 		});
+
+		console.log(ws);
 	}
 
 	const checkServerStatus = async () => {
@@ -61,6 +71,8 @@
 	checkServerStatus();
 
 	const on = (event, listener) => {
+		if(event.startsWith('_'))
+			return console.error(`Event names with leading underscore are reserved for internal events: ${event}`)
 		listeners[event] = listener;
 	}
 
@@ -80,9 +92,14 @@
 		ws.send(JSON.stringify({event, payload}));
 	}
 
+	const isSelf = id => id === ws.id;
+	const getId = () => ws.id;
+
 	exports.on = on;
 	exports.off = off;
 	exports.request = request;
 	exports.push = push;
+	exports.isSelf = isSelf;
+	exports.getId = getId;
 
 })(WS = {});
