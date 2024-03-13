@@ -6,22 +6,63 @@
 <body>
 	<h1>WebSocket Test</h1>
 	<input placeholder="message" />
-	<button>Send</button>
+	<button id="send">Send</button>
+	<span id="fps"></span>
+	<span id="adj"></span>
 	<span id="ping"></span>
 	<div id="messages"></div>
 	<div id="sliders"></div>
+	<br>
+	<button id="tickp">- Tick</button>
+	<button id="tickm">+ Tick</button>
+	<button id="randp">Rand Pos</button>
+
 	<script type="text/javascript" src="scripts/websocket.js"></script>
+	<script type="text/javascript" src="scripts/vector.js"></script>
+	<script type="text/javascript" src="scripts/game.js"></script>
 	<script type="text/javascript">
 
-		document.addEventListener('click', (e) => {
-			if(e.target.tagName !== 'BUTTON')
-				return;
+		const keys = {};
 
-			const input = document.querySelector("input")
-			const msg = input.value;
-			input.value = '';
+		const canvas = document.createElement('canvas');
+		const context = canvas.getContext('2d');
 
-			WS.push('message', msg);
+		canvas.width = 500;
+		canvas.height = 500;
+
+		document.body.appendChild(canvas);
+
+		let pos = new Vector(rand(0, 500), rand(0, 500));
+		const history = [];
+
+		const ticksPerSecond = 60;
+		const historySpan = 2;
+
+		document.addEventListener('click', async (e) => {
+			switch(e.target.id) {
+				case 'send': {
+					const input = document.querySelector("input")
+					const msg = input.value;
+					input.value = '';
+
+					WS.push('message', msg);
+					break;
+				}
+				case 'tickp': {
+					Game.mod_tick(1)
+					break;
+				}
+				case 'tickm': {
+					Game.mod_tick(-1)
+					break;
+				}
+				case 'randp': {
+					pos.x = rand(0, 500);
+					pos.y = rand(0, 500);
+					break;
+				}
+			}
+
 		});
 
 		WS.on('message', msg => {
@@ -30,11 +71,71 @@
 			document.querySelector('#messages').appendChild(div);
 		});
 
+
 		WS.on('connect', payload => {
 			const {id} = payload;
 
+			Game.init(ticksPerSecond);
+
+			WS.push('game_set_pos', pos);
+			console.log('initial pos', pos);
+
+			Game.on_tick(tick => {
+
+				const step = 3;
+
+				const input = [
+					keys.KeyW ? 1 : 0,
+					keys.KeyA ? 1 : 0,
+					keys.KeyS ? 1 : 0,
+					keys.KeyD ? 1 : 0,
+				];
+
+				if(input.some(x => x))
+				{
+					Game.sendEvent('move', input);
+					// history.push({tick, input, position: pos});
+					// WS.push('game_input', {t: tick, i: input});
+				}
+
+				pos = applyInput(pos, input);
+
+				context.fillStyle = '#333';
+				context.fillRect(0, 0, 500, 500);
+
+				context.fillStyle = '#f00';
+				context.beginPath();
+				context.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
+				context.fill();
+			});
+
 			addSlider(id);
 		});
+
+		WS.on('game_validation', payload => {
+			const {t: verifiedTick, p: validatedPosition} = payload;
+			const index = history.findIndex(entry => entry.tick === verifiedTick);
+
+			if(index == null)
+				return;
+
+			let reconciledPositon = Vector.from(validatedPosition);
+
+			for(let i = index + 1; i < history.length; i++) {
+				const {input} = history[i];
+				reconciledPositon = applyInput(reconciledPositon, input);
+			}
+
+			if(reconciledPositon.subtract(pos).magnitude() > 10)
+			{
+				pos = reconciledPositon;
+				console.log('adjusted position you fucking cheater...');
+			}
+
+			history.splice(0, index + 1);
+		});
+
+
 
 		WS.on('list', payload => {
 			const {ids} = payload;
@@ -99,18 +200,129 @@
 			console.log(slider.value.padStart(3, ' '));
 		}
 
-		document.addEventListener('keydown', e => {
-			const id = WS.getId();
+		document.addEventListener('keydown', event => keys[event.code] = true);
+		document.addEventListener('keyup', event => delete keys[event.code]);
 
-			if(e.key === 'ArrowLeft') {
-				moveSlider(id, -1);
-				WS.push('move', {id, x: -1, y: 0});
-			}
-			if(e.key === 'ArrowRight') {
-				moveSlider(id, 1);
-				WS.push('move', {id, x: 1, y: 0});
-			}
-		});
+
+		function applyInput(position, input) {
+			const stepAmount = 3;
+
+			const step = new Vector(
+				input[3] - input[1],
+				input[2] - input[0]
+			);
+
+			const stepMultiplied = step.scalarMultiply(stepAmount);
+			// const stepNormalized = stepMultiplied.normalize();
+			const stepNormalized = stepMultiplied;
+
+			return new Vector(
+				(position.x + stepNormalized.x).clamp(0, 500),
+				(position.y + stepNormalized.y).clamp(0, 500)
+			)
+		};
+
+		// let then = performance.now();
+
+		// const animate = () => {
+		// 	requestAnimationFrame(animate);
+
+		// 	const now = performance.now();
+		// 	const factor = (now - then) / 1000;
+		// 	const step = 300 * factor;
+		// 	then = now;
+
+		// 	if(keys.KeyW)
+		// 		pos.y = Math.max(0, pos.y - step);
+		// 	if(keys.KeyA)
+		// 		pos.x = Math.max(0, pos.x - step);
+		// 	if(keys.KeyS)
+		// 		pos.y = Math.min(500, pos.y + step);
+		// 	if(keys.KeyD)
+		// 		pos.x = Math.min(500, pos.x + step);
+
+		// 	context.fillStyle = '#333';
+		// 	context.fillRect(0, 0, 500, 500);
+
+		// 	context.fillStyle = '#f00';
+		// 	context.beginPath();
+		// 	context.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
+		// 	context.fill();
+		// };
+
+		// requestAnimationFrame(animate);
+
+		function rand(min, max) {
+			return Math.round(Math.random() * (max - min) + min);
+		}
+
+		Number.prototype.clamp = function(min, max) {
+			return Math.min(Math.max(this, min), max);
+		}
+
+		// let tick = 0;
+		// let start = 0;
+		// let then = 0;
+
+
+		// const animate = time => {
+		// 	requestAnimationFrame(animate);
+
+		// 	if(time - then > 1000) {
+		// 		start = time;
+		// 		tick = 0;
+		// 		console.log(time - then);
+		// 	}
+
+		// 	const fps = tick / (time - start) * 1000;
+
+		// 	document.querySelector('#ping').textContent = `FPS: ${fps} `;
+
+		// 	tick++;
+		// 	then = time;
+		// };
+
+		// requestAnimationFrame(animate);
+
+		// let start = performance.now();
+		// let then = start;
+		// let tick = 0;
+		// const target_interval = 1000 / 10;
+		// let sleep_time = target_interval;
+
+		// const animate = () => {
+		// 	const now = performance.now();
+
+		// 	const actual_interval = now - then;
+		// 	const drift = actual_interval - target_interval
+		// 	sleep_time -= drift;
+
+		// 	const time = performance.now();
+
+		// 	const fps = tick / (now - start) * 1000;
+
+		// 	document.querySelector('#fps').textContent = `FPS: ${fps.toFixed(5)} `;
+
+		// 	setTimeout(animate, Math.max(0, sleep_time));
+
+		// 	tick++;
+		// 	then = now;
+		// }
+
+		// animate();
+
+
+		// setInterval(() => {
+
+		// 	const time = performance.now();
+
+		// 	const fps = tick / (time - start) * 1000;
+
+		// 	document.querySelector('#ping').textContent = `FPS: ${fps} `;
+
+		// 	tick++;
+
+		// }, 1000 / 58.5);
 
 	</script>
 </body>

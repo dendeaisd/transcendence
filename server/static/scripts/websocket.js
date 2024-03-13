@@ -7,8 +7,8 @@
 	const isResponse = message => message.id != null;
 
 	function connectWebSocket() {
-		console.log("Connecting");
-		ws = new WebSocket("ws://localhost:3000");
+		console.log('Connecting');
+		ws = new WebSocket(`ws://${window.location.hostname}:3000`);
 
 		// ws.onopen = function() {
 		// 	console.log("Connected");
@@ -28,8 +28,8 @@
 			const data = JSON.parse(incoming.data);
 			const {id, event, payload} = data;
 
-			if(id == null)
-				console.log(data);
+			// if(id == null)
+			// 	console.log(data);
 
 			if(isResponse(data))
 				return requests[id](payload);
@@ -57,7 +57,7 @@
 			return;
 
 		try {
-			const response = await fetch('http://localhost:8080/health')
+			const response = await fetch(`http://${window.location.hostname}:8080/health`)
 
 			if(!response.ok)
 				return;
