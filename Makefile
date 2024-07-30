@@ -19,9 +19,11 @@ logs:
 clean:
 	docker-compose down --rmi all
 
-delete: 
+delete:
 	docker-compose down -v --remove-orphans
 	docker-compose down --rmi all
 	docker-compose rm -f
 
-.PHONY: help up down logs clean delete
+re: clean up
+
+.PHONY: help up down logs clean delete re
